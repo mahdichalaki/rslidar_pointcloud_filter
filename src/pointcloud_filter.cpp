@@ -19,26 +19,47 @@ public:
   PointCloudFilter()
   : Node("pointcloud_filter")
   {
-    // Publishers for filtered point cloud and LaserScan messages
-    filtered_pc_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/rslidar_points_filtered", 10);
-    laser_scan_pub_  = this->create_publisher<sensor_msgs::msg::LaserScan>("/scan", 10);
+    // --- Define ROS Parameters ---
+    // Topics
+    this->declare_parameter<std::string>("pointcloud_topic", "/rslidar_points");
+    this->declare_parameter<std::string>("filtered_pc_topic", "/rslidar_points_filtered");
+    this->declare_parameter<std::string>("laser_scan_topic", "/scan");
+    // Filtering Parameters
+    this->declare_parameter<float>("min_height", -0.335 - 0.2339 + 0.05);
+    this->declare_parameter<float>("max_height", 0.5);
+    // LaserScan Parameters
+    this->declare_parameter<float>("scan_angle_min", -M_PI);
+    this->declare_parameter<float>("scan_angle_max", M_PI);
+    this->declare_parameter<float>("scan_angle_increment", M_PI / 180.0 / 10.0);
+    this->declare_parameter<float>("scan_range_min", 0.2);
+    this->declare_parameter<float>("scan_range_max", 200.0);
 
-    // Subscriber to the raw LiDAR point cloud
+    // --- Get Topic Names ---
+    std::string pointcloud_topic, filtered_pc_topic, laser_scan_topic;
+    this->get_parameter("pointcloud_topic", pointcloud_topic);
+    this->get_parameter("filtered_pc_topic", filtered_pc_topic);
+    this->get_parameter("laser_scan_topic", laser_scan_topic);
+
+    // --- Publishers ---
+    filtered_pc_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(filtered_pc_topic, 10);
+    laser_scan_pub_  = this->create_publisher<sensor_msgs::msg::LaserScan>(laser_scan_topic, 10);
+
+    // --- Subscribers ---
     pointcloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-      "/rslidar_points", 10,
+      pointcloud_topic, 10,
       std::bind(&PointCloudFilter::pointCloudCallback, this, std::placeholders::_1));
 
-    // Filtering parameters
-    min_height_ = -0.335 - 0.2339 + 0.05;  // Minimum height to keep (ground level + 5cm)
-    max_height_ = 5.0;                     // Maximum height
+    // --- Get ROS Parameters ---
+    // Get parameters
+    this->get_parameter("min_height", min_height_);
+    this->get_parameter("max_height", max_height_);
+    this->get_parameter("scan_angle_min", scan_angle_min_);
+    this->get_parameter("scan_angle_max", scan_angle_max_);
+    this->get_parameter("scan_angle_increment", scan_angle_increment_);
+    this->get_parameter("scan_range_min", scan_range_min_);
+    this->get_parameter("scan_range_max", scan_range_max_);
 
-    // LaserScan parameters
-    scan_angle_min_      = -M_PI;
-    scan_angle_max_      =  M_PI;
-    scan_angle_increment_ = M_PI / 180.0 / 10.0;  // 0.1-degree resolution
-    scan_range_min_      = 0.2;
-    scan_range_max_      = 200.0;
-
+    // Calculate the number of bins in the LaserScan message
     num_bins_ = static_cast<int>((scan_angle_max_ - scan_angle_min_) / scan_angle_increment_);
 
     RCLCPP_INFO(this->get_logger(), "PointCloud filter node has started.");
